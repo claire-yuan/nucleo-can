@@ -69,6 +69,8 @@ uint8_t RxData[8];
 
 uint8_t count = 0;
 
+uint8_t error_code = 0;
+
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
 	HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, RxData);
 	if (RxData[0] == 0x11 && RxData[1] == 0x22 && RxData[2] == 0x33 && RxData[3] == 0x44 && RxData[4] == 0x55 && RxData[5] == 0x66 && RxData[6] == 0x77 && RxData[7] == 0x88)
@@ -116,7 +118,7 @@ int main(void)
   TxHeader.DLC = 8;
   TxHeader.IDE = CAN_ID_STD;
   TxHeader.RTR = CAN_RTR_DATA;
-  TxHeader.StdId = 0x203;
+  TxHeader.StdId = 0b01010010001;
   TxHeader.TransmitGlobalTime = DISABLE;
 
   /* USER CODE END 2 */
@@ -125,12 +127,37 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
 	  if (button_pressed == 1) {
-		  uint8_t TxData[8] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88} ;
-		  HAL_CAN_AddTxMessage(&hcan, &TxHeader, TxData, &TxMailbox);
-		  button_pressed = 0;
+	  		  uint8_t TxData[8] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88} ;
+	  		  HAL_CAN_AddTxMessage(&hcan, &TxHeader, TxData, &TxMailbox);
+
+	  		  	 /* https://stackoverflow.com/questions/61376402/stm32-can-loop-back-mode*/
+	  		  //waiting for message to leave
+	  		  while(HAL_CAN_IsTxMessagePending(&hcan, TxMailbox));
+
+	  		  //waiting for transmission request to be completed by checking RQCPx
+	  		  while( !(hcan.Instance->TSR & ( 0x1 << (7 * ( TxMailbox - 1 )))));
+
+	  		  //checking if there is an error at TERRx, may be done with TXOKx as well (i think)
+	  		  if ((hcan.Instance->TSR & ( 0x8 << (7 * ( TxMailbox - 1 ))))){
+	  		      //error is described in ESR at LEC last error code
+	  		      error_code = ( hcan.Instance->ESR & 0x70 ) >> 4;
+	  		      //000: No Error
+	  		      //001: Stuff Error
+	  		      //010: Form Error
+	  		      //011: Acknowledgment Error
+	  		      //100: Bit recessive Error
+	  		      //101: Bit dominant Error
+	  		      //110: CRC Error
+	  		      //111: Set by software
+	  		  }
+
+
+	  //		  HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+	  		  button_pressed = 0;
 	  }
+    /* USER CODE END WHILE */
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
