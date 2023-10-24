@@ -118,7 +118,7 @@ int main(void)
   TxHeader.DLC = 8;
   TxHeader.IDE = CAN_ID_STD;
   TxHeader.RTR = CAN_RTR_DATA;
-  TxHeader.StdId = 0b01010010001;
+  TxHeader.StdId = 0b01010010011;
   TxHeader.TransmitGlobalTime = DISABLE;
 
   /* USER CODE END 2 */
@@ -223,11 +223,11 @@ static void MX_CAN_Init(void)
 
   /* USER CODE END CAN_Init 1 */
   hcan.Instance = CAN;
-  hcan.Init.Prescaler = 16;
+  hcan.Init.Prescaler = 12;
   hcan.Init.Mode = CAN_MODE_NORMAL;
   hcan.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  hcan.Init.TimeSeg1 = CAN_BS1_1TQ;
-  hcan.Init.TimeSeg2 = CAN_BS2_1TQ;
+  hcan.Init.TimeSeg1 = CAN_BS1_13TQ;
+  hcan.Init.TimeSeg2 = CAN_BS2_2TQ;
   hcan.Init.TimeTriggeredMode = DISABLE;
   hcan.Init.AutoBusOff = DISABLE;
   hcan.Init.AutoWakeUp = DISABLE;
@@ -243,12 +243,13 @@ static void MX_CAN_Init(void)
   canfilterconfig.FilterActivation = CAN_FILTER_ENABLE;
   canfilterconfig.FilterBank = 0;
   canfilterconfig.FilterFIFOAssignment = CAN_RX_FIFO0;
-  canfilterconfig.FilterIdHigh = 0;
-  canfilterconfig.FilterIdLow = 0x0000;
-  canfilterconfig.FilterMaskIdHigh = 0;
-  canfilterconfig.FilterMaskIdLow = 0x0000;
+  canfilterconfig.FilterIdHigh=0x0000;
+  canfilterconfig.FilterIdLow=0x0000;
+  canfilterconfig.FilterMaskIdHigh=0x0000;
+  canfilterconfig.FilterMaskIdLow=0x0000;
   canfilterconfig.FilterMode = CAN_FILTERMODE_IDMASK;
   canfilterconfig.FilterScale = CAN_FILTERSCALE_32BIT;
+  canfilterconfig.SlaveStartFilterBank = 0;
 
   if (HAL_CAN_ConfigFilter(&hcan, &canfilterconfig) != HAL_OK) {
   		Error_Handler();
