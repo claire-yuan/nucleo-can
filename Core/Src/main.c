@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "can.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -40,7 +41,6 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-CAN_HandleTypeDef hcan;
 
 UART_HandleTypeDef huart2;
 
@@ -52,32 +52,14 @@ UART_HandleTypeDef huart2;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
-static void MX_CAN_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
-CAN_TxHeaderTypeDef TxHeader;
-CAN_RxHeaderTypeDef RxHeader;
-
-uint32_t TxMailbox;
-
-uint8_t RxData[8];
-
-uint8_t count = 0;
-
-uint8_t error_code = 0;
-
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
-	HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, RxData);
-	if (RxData[0] == 0x11 && RxData[1] == 0x22 && RxData[2] == 0x33 && RxData[3] == 0x44 && RxData[4] == 0x55 && RxData[5] == 0x66 && RxData[6] == 0x77 && RxData[7] == 0x88)
-		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-}
-
-int button_pressed = 0;
+volatile uint8_t button_pressed = 0;
+uint8_t error_code;
 /* USER CODE END 0 */
 
 /**
@@ -110,17 +92,9 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_CAN_Init();
+
   /* USER CODE BEGIN 2 */
-
-  HAL_CAN_Start(&hcan);
-  HAL_CAN_ActivateNotification(&hcan, CAN_IT_RX_FIFO0_MSG_PENDING);
-
-  TxHeader.DLC = 8;
-  TxHeader.IDE = CAN_ID_STD;
-  TxHeader.RTR = CAN_RTR_DATA;
-  TxHeader.StdId = 0b01010010011;
-  TxHeader.TransmitGlobalTime = DISABLE;
-
+  CAN_set_TxHeader(CAN_ID_STD, CAN_RTR_DATA, 0b01010011011);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -128,33 +102,18 @@ int main(void)
   while (1)
   {
 	  if (button_pressed == 1) {
-	  		  uint8_t TxData[8] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88} ;
-	  		  HAL_CAN_AddTxMessage(&hcan, &TxHeader, TxData, &TxMailbox);
-
-	  		  	 /* https://stackoverflow.com/questions/61376402/stm32-can-loop-back-mode*/
-	  		  //waiting for message to leave
-	  		  while(HAL_CAN_IsTxMessagePending(&hcan, TxMailbox));
-
-	  		  //waiting for transmission request to be completed by checking RQCPx
-	  		  while( !(hcan.Instance->TSR & ( 0x1 << (7 * ( TxMailbox - 1 )))));
-
-	  		  //checking if there is an error at TERRx, may be done with TXOKx as well (i think)
-	  		  if ((hcan.Instance->TSR & ( 0x8 << (7 * ( TxMailbox - 1 ))))){
-	  		      //error is described in ESR at LEC last error code
-	  		      error_code = ( hcan.Instance->ESR & 0x70 ) >> 4;
-	  		      //000: No Error
-	  		      //001: Stuff Error
-	  		      //010: Form Error
-	  		      //011: Acknowledgment Error
-	  		      //100: Bit recessive Error
-	  		      //101: Bit dominant Error
-	  		      //110: CRC Error
-	  		      //111: Set by software
-	  		  }
-
+	  		  uint8_t TxData[8] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88};
+	  		  error_code = transmit_CAN_message(TxData, 8);
 
 	  		  HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
 	  		  button_pressed = 0;
+	  }
+
+	  if (CAN_received == 1) {
+		  if (RxData[0] == 0x11 && RxData[1] == 0x22 && RxData[2] == 0x33 && RxData[3] == 0x44 && RxData[4] == 0x55 && RxData[5] == 0x66 && RxData[6] == 0x77 && RxData[7] == 0x88)
+		  		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+
+		  CAN_received = 0;
 	  }
     /* USER CODE END WHILE */
 
@@ -207,62 +166,6 @@ void SystemClock_Config(void)
   }
 }
 
-/**
-  * @brief CAN Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_CAN_Init(void)
-{
-
-  /* USER CODE BEGIN CAN_Init 0 */
-
-  /* USER CODE END CAN_Init 0 */
-
-  /* USER CODE BEGIN CAN_Init 1 */
-
-  /* USER CODE END CAN_Init 1 */
-  hcan.Instance = CAN;
-  hcan.Init.Prescaler = 12;
-  hcan.Init.Mode = CAN_MODE_NORMAL;
-  hcan.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  hcan.Init.TimeSeg1 = CAN_BS1_13TQ;
-  hcan.Init.TimeSeg2 = CAN_BS2_2TQ;
-  hcan.Init.TimeTriggeredMode = DISABLE;
-  hcan.Init.AutoBusOff = DISABLE;
-  hcan.Init.AutoWakeUp = DISABLE;
-  hcan.Init.AutoRetransmission = DISABLE;
-  hcan.Init.ReceiveFifoLocked = DISABLE;
-  hcan.Init.TransmitFifoPriority = DISABLE;
-  if (HAL_CAN_Init(&hcan) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN CAN_Init 2 */
-  CAN_FilterTypeDef canfilterconfig;
-  canfilterconfig.FilterActivation = CAN_FILTER_ENABLE;
-  canfilterconfig.FilterBank = 0;
-  canfilterconfig.FilterFIFOAssignment = CAN_RX_FIFO0;
-  canfilterconfig.FilterIdHigh=0x0000;
-  canfilterconfig.FilterIdLow=0x0000;
-  canfilterconfig.FilterMaskIdHigh=0x0000;
-  canfilterconfig.FilterMaskIdLow=0x0000;
-  canfilterconfig.FilterMode = CAN_FILTERMODE_IDMASK;
-  canfilterconfig.FilterScale = CAN_FILTERSCALE_32BIT;
-  canfilterconfig.SlaveStartFilterBank = 0;
-
-  if (HAL_CAN_ConfigFilter(&hcan, &canfilterconfig) != HAL_OK) {
-  		Error_Handler();
-  	}
-
-  	if (HAL_CAN_Start(&hcan) != HAL_OK) {
-  		Error_Handler();
-  	}
-
-  	HAL_CAN_ActivateNotification(&hcan,CAN_IT_RX_FIFO0_MSG_PENDING);// Initialize CAN Bus Rx Interrupt
-  /* USER CODE END CAN_Init 2 */
-
-}
 
 /**
   * @brief USART2 Initialization Function
